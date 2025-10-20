@@ -6,9 +6,18 @@ from email.utils import parsedate_to_datetime
 from datetime import timezone, datetime
 from urllib.parse import urljoin, urlparse
 import feedparser
+from io import BytesIO
 
 from .utils.util import uopen, smkdirs
 from .utils.patch import SessionMonkeyPatch
+
+# Try to import PIL for image conversion
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("⚠️ Pillow not installed. ICO files won't be converted to PNG.")
 
 
 def download_image(image_url, images_dir, referer=None):
@@ -26,6 +35,13 @@ def download_image(image_url, images_dir, referer=None):
         if not filename or '.' not in filename:
             filename = f"image_{abs(hash(image_url)) % 1000000}{Path(parsed.path).suffix or '.jpg'}"
 
+        # Check if it's an ICO file
+        is_ico = filename.lower().endswith('.ico')
+        
+        # If ICO and PIL available, change extension to PNG
+        if is_ico and PIL_AVAILABLE:
+            filename = filename[:-4] + '.png'
+
         # Remove ALL control characters and problematic chars
         safe_filename = ''.join(c for c in filename if ord(c) >= 32 and c not in '\0\r\n')
         safe_filename = safe_filename.replace('/', '∕')
@@ -34,7 +50,6 @@ def download_image(image_url, images_dir, referer=None):
 
         if local_path.exists():
             print(f"[i] Image already exists: {local_path.name}")
-            # Return clean relative path without leading ./
             return f"images/{safe_filename}"
 
         print(f"[↓] Downloading image: {image_url} → {local_path.name}")
@@ -44,12 +59,35 @@ def download_image(image_url, images_dir, referer=None):
         response.raise_for_status()
 
         content_type = response.headers.get('content-type', '')
-        if not content_type.startswith('image/'):
-            print(f"[!] Not an image (Content-Type: {content_type}): {image_url}")
-            return None
+        
+        # Accept various favicon content types
+        valid_types = ['image/', 'application/octet-stream', 'text/plain']
+        if not any(content_type.startswith(t) for t in valid_types):
+            # For ICO files, sometimes servers return wrong content-type
+            if not (is_ico or image_url.endswith('.ico')):
+                print(f"[!] Not an image (Content-Type: {content_type}): {image_url}")
+                return None
+
+        image_content = response.content
+        
+        # Convert ICO to PNG if possible
+        if (is_ico or image_url.lower().endswith('.ico')) and PIL_AVAILABLE:
+            try:
+                print(f"🔄 Converting ICO to PNG...")
+                ico_image = Image.open(BytesIO(image_content))
+                
+                # Get the largest size from the ICO file
+                if hasattr(ico_image, 'size'):
+                    # Save as PNG
+                    png_buffer = BytesIO()
+                    ico_image.save(png_buffer, format='PNG')
+                    image_content = png_buffer.getvalue()
+                    print(f"✅ Converted ICO to PNG ({ico_image.size[0]}x{ico_image.size[1]})")
+            except Exception as e:
+                print(f"⚠️ Failed to convert ICO to PNG: {e}, saving as-is")
 
         with open(local_path, 'wb') as f:
-            f.write(response.content)
+            f.write(image_content)
 
         return f"images/{safe_filename}"
 
@@ -114,7 +152,7 @@ def fetch_favicon(site_url, images_dir, session=None):
             favicon_url = urljoin(base_url, favicon_url)
             print(f"✅ Found favicon: {favicon_url}")
             
-            # Download it
+            # Download it (will auto-convert ICO to PNG)
             local_path = download_image(favicon_url, images_dir, referer=base_url)
             return favicon_url, local_path
         else:
