@@ -89,6 +89,8 @@ def main():
                         help="Item output format (default: json)")
     parser.add_argument("--no-ia-check", action="store_true", help="Skip Internet Archive check")
     parser.add_argument("--user-agent", default=None, help="Custom User-Agent header")
+    parser.add_argument("--warc", "-w", action="store_true", 
+                        help="Save WARC file with all HTTP transactions")
 
     args = parser.parse_args()
 
@@ -144,7 +146,8 @@ def main():
             url=url,
             output_dir=output_dir,
             session=session,
-            item_format=args.format
+            item_format=args.format,
+            save_warc=args.warc  # Pass WARC flag
         )
     except Exception as e:
         print(f"[!] Failed to download feed: {e}")
@@ -155,14 +158,17 @@ def main():
         'completed_at': datetime.utcnow().isoformat() + 'Z',
         'items_downloaded': stats.get('items', 0),
         'images_downloaded': stats.get('images', 0),
+        'total_media': stats.get('total_media', 0),
+        'has_warc': stats.get('has_warc', False),
         'status': 'success' if stats.get('items', 0) > 0 else 'failed'
     })
     update_config(str(output_dir), config)
 
-    print(f"\n✅ Done! Archived {stats.get('items', 0)} items and {stats.get('images', 0)} images.")
+    print(f"\n✅ Done! Archived {stats.get('items', 0)} items and {stats.get('total_media', 0)} total media files.")
+    if args.warc:
+        print(f"📼 WARC archive created: feed.warc.gz")
     print(f"📂 Output: {output_dir}")
     print(f"📁 Command: python3 -m RSS-Dumper.rssuploader ./{output_dir}")
-
 
 if __name__ == "__main__":
     main()

@@ -9,6 +9,7 @@ A comprehensive RSS/Atom feed archiver that downloads and preserves feeds with a
 - Extracts and saves all feed metadata in structured JSON
 - Archives all feed items with full metadata preservation
 - Supports both JSON and Markdown output formats
+- Optional WARC format for complete HTTP transaction preservation
 
 ### 📸 Media Downloading
 - **Images**: Downloads all images from feed items, including:
@@ -32,6 +33,14 @@ A comprehensive RSS/Atom feed archiver that downloads and preserves feeds with a
   - PDF attachments
   - Other document enclosures
 
+### 📼 WARC Support (Web ARChive)
+- Captures complete HTTP transactions
+- Preserves all HTTP headers and response codes
+- Records exact timestamps for each request
+- Compatible with Wayback Machine replay tools
+- Documents server infrastructure and CDN behavior
+- Creates browsable archives with pywb or ReplayWeb.page
+
 ### 🔧 Namespace Support
 Comprehensive support for RSS extensions and namespaces:
 - **Standard RSS 2.0** - All core elements
@@ -53,6 +62,7 @@ Comprehensive support for RSS extensions and namespaces:
 - Metadata preservation
 - Collection organization
 - Logo/favicon upload
+- Optional WARC upload to special collections for Wayback Machine ingestion
 
 ## Installation
 
@@ -63,6 +73,7 @@ pip install feedparser requests internetarchive
 
 # Optional but recommended
 pip install Pillow  # For ICO to PNG conversion
+pip install warcio  # For WARC file creation
 
 # For Internet Archive upload
 sudo apt-get install p7zip-full  # Or your OS equivalent
@@ -96,6 +107,9 @@ python3 -m RSS-Dumper.rssdumper https://example.com/feed.rss --format md
 
 # Custom User-Agent
 python3 -m RSS-Dumper.rssdumper https://example.com/feed.rss --user-agent "MyBot/1.0"
+
+# Create WARC archive (captures all HTTP transactions)
+python3 -m RSS-Dumper.rssdumper https://example.com/feed.rss --warc
 ```
 
 For edge cases (experimental feeds):
@@ -129,6 +143,9 @@ python3 -m RSS-Dumper.rssuploader ./example.com_20251019_232222 -n images
 
 # Delete local copy after upload
 python3 -m RSS-Dumper.rssuploader ./example.com_20251019_232222 -d
+
+# Upload WARC to special collection for potential Wayback Machine ingestion
+python3 -m RSS-Dumper.rssuploader ./example.com_20251019_232222 --warc-collection archiveteam_urls
 ```
 
 ## Output Structure
@@ -136,24 +153,47 @@ python3 -m RSS-Dumper.rssuploader ./example.com_20251019_232222 -d
 ```
 example.com_20251019_232222/
 ├── feed.json           # Parsed feed metadata
-├── feed.rss           # Original raw RSS/XML feed
-├── items/             # Individual feed items
+├── feed.rss            # Original raw RSS/XML feed
+├── feed.warc.gz        # WARC archive (if --warc used)
+├── items/              # Individual feed items
 │   ├── 2025-10-19 — Article Title.json
 │   └── 2025-10-18 — Another Article.json
-├── images/            # Downloaded images
+├── images/             # Downloaded images
 │   ├── thumbnail1.jpg
 │   ├── logo.png
 │   └── favicon.png
-├── audio/             # Podcast episodes (if applicable)
+├── audio/              # Podcast episodes (if applicable)
 │   └── episode1.mp3
-├── video/             # Video content (if applicable)
+├── video/              # Video content (if applicable)
 │   └── video1.mp4
-├── documents/         # Transcripts, chapters, etc.
+├── documents/          # Transcripts, chapters, etc.
 │   └── transcript.txt
-├── media/             # Other media files
-└── dumpMeta/          # Dump metadata
-    └── config.json    # Dump configuration
+├── media/              # Other media files
+└── dumpMeta/           # Dump metadata
+    └── config.json     # Dump configuration
+```
 
+## WARC Archive Contents
+
+When using `--warc`, the `feed.warc.gz` file preserves:
+- **HTTP Headers**: User-Agent, Server, Content-Type, Cache-Control, ETags
+- **Response Codes**: 200 OK, 301 redirects, 304 not-modified
+- **Timestamps**: Exact capture time for each request
+- **Server Info**: CDN details, rate limits, compression
+- **Complete Transactions**: Both requests and responses for all downloads
+
+### Replaying WARC Files
+
+```bash
+# Using pywb (Python Wayback)
+pip install pywb
+wb-manager init my-collection
+wb-manager add my-collection feed.warc.gz
+wayback
+# Browse at http://localhost:8080/my-collection/
+
+# Using ReplayWeb.page (browser-based)
+# Visit https://replayweb.page and drag-drop your WARC file
 ```
 
 ## What Gets Downloaded
@@ -166,6 +206,7 @@ example.com_20251019_232222/
 - Feed image/logo (with favicon fallback)
 - iTunes/Google Play podcast metadata
 - Categories and tags
+- Complete namespace declarations
 
 ### Item Level
 - Title, link, description, author
@@ -177,6 +218,7 @@ example.com_20251019_232222/
 - Transcripts and chapter files
 - iTunes episode information
 - Geographic data (if present)
+- All namespace-specific metadata
 
 ### Media Processing
 - **Images**: Downloaded and paths rewritten in HTML
@@ -184,6 +226,7 @@ example.com_20251019_232222/
 - **Favicons**: Fetched if no feed image exists
 - **Audio/Video**: Downloaded with metadata preserved
 - **Documents**: PDF, transcripts, chapters preserved
+- **HTTP Transactions**: Captured in WARC if enabled
 
 ## Internet Archive Upload
 
@@ -193,8 +236,21 @@ Files are organized and compressed before upload:
 - `audio.7z` - Audio files (if present)
 - `video.7z` - Video files (if present)
 - `documents.7z` - Documents (if present)
+- `media.7z` - Other media files (if present)
 - `feed.json` - Parsed metadata
 - `feed.rss` - Original feed
+- `feed.warc.gz` - WARC archive (if created)
+
+### WARC Collections
+
+For potential Wayback Machine ingestion, upload WARCs to special collections:
+```bash
+# Upload to archiveteam collection
+python3 -m RSS-Dumper.rssuploader ./dump_dir --warc-collection archiveteam_urls
+
+# Upload to your own collection
+python3 -m RSS-Dumper.rssuploader ./dump_dir --warc-collection my-warc-collection
+```
 
 ## Advanced Features
 
@@ -211,9 +267,17 @@ Prevents multiple simultaneous dumps of the same feed.
 
 ### Compression Optimization
 - Smart compression levels based on file type
-- JSON/text: High compression
-- Media files: Low/no compression
-- Documents: Medium compression
+- JSON/text: High compression (level 5)
+- Media files: Low compression (level 1)
+- Documents: Medium compression (level 3)
+- Optional no-compression mode for faster processing
+
+### WARC Benefits
+- **Complete Preservation**: Every HTTP transaction recorded
+- **Research Value**: Headers show server infrastructure, CDNs, redirects
+- **Legal Evidence**: Cryptographically verifiable timestamps
+- **Wayback Compatible**: Can be replayed in any Wayback Machine
+- **Future-Proof**: Preserves technical context for historical research
 
 ## Examples
 
@@ -222,18 +286,29 @@ Prevents multiple simultaneous dumps of the same feed.
 python3 -m RSS-Dumper.rssdumper https://example.blog/feed.xml
 ```
 
-### Archive a podcast
+### Archive a podcast with WARC
 ```bash
-python3 -m RSS-Dumper.rssdumper https://podcast.example.com/rss
+python3 -m RSS-Dumper.rssdumper https://podcast.example.com/rss --warc
 ```
 
-### Archive and upload to IA
+### Archive and upload to IA with WARC collection
 ```bash
-# Download
-python3 -m RSS-Dumper.rssdumper https://news.site.com/rss.xml
+# Download with WARC
+python3 -m RSS-Dumper.rssdumper https://news.site.com/rss.xml --warc
 
-# Upload
-python3 -m RSS-Dumper.rssuploader ./news.site.com_20251020_120000
+# Upload with WARC to special collection
+python3 -m RSS-Dumper.rssuploader ./news.site.com_20251020_120000 --warc-collection archiveteam_urls
+```
+
+### Complete preservation workflow
+```bash
+# 1. Download with all preservation features
+python3 -m RSS-Dumper.rssdumper https://important.feed/rss --warc --format json
+
+# 2. Upload to Internet Archive with WARC collection
+python3 -m RSS-Dumper.rssuploader ./important.feed_20251020_120000 --warc-collection my-feeds
+
+# 3. The WARC can later be submitted for Wayback Machine ingestion
 ```
 
 ## Contributing
@@ -245,6 +320,7 @@ Pull requests welcome for:
 - Performance improvements
 - Bug fixes
 - Documentation improvements
+- WARC enhancements
 - Everything and anything
 
 ## Acknowledgments
@@ -252,3 +328,4 @@ Pull requests welcome for:
 - Inspired by [wikiteam3](https://github.com/saveweb/wikiteam3) and [DokuWiki Dumper](https://github.com/saveweb/dokuwiki-dumper)
 - Uses [feedparser](https://github.com/kurtmckee/feedparser) for RSS parsing
 - Uploads via [internetarchive](https://github.com/jjjake/internetarchive) Python library
+- WARC support via [warcio](https://github.com/webrecorder/warcio)

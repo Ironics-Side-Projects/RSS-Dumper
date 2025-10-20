@@ -61,7 +61,6 @@ MEDIA_COMPRESSION_LEVEL = 1
 DEFAULT_COMPRESSION_LEVEL = 5
 NO_COMPRESSION_LEVEL = 0
 
-
 @dataclass
 class UploadConfig:
     """Configuration for upload process."""
@@ -73,7 +72,7 @@ class UploadConfig:
     pack_dumpMeta_dir: bool
     level0_no_compress: List[str]
     delete_after_upload: bool = False
-
+    warc_collection: Optional[str] = None
 
 @dataclass
 class FeedMetadata:
@@ -113,6 +112,9 @@ class IAUploader:
             # Upload to Internet Archive
             item_metadata = self._create_item_metadata(feed_meta)
             self._upload_to_ia(identifier, files_to_upload, item_metadata)
+
+            if self.config.warc_collection:
+                self._upload_warc_separately(identifier, self.config.warc_collection)
 
             # Get item reference for logo upload
             remote_identifier = f"rss-{identifier}"
@@ -264,6 +266,11 @@ class IAUploader:
             # Upload individual files in dumpMeta
             self._add_dumpmeta_files(identifier, filedict)
 
+        warc_path = os.path.join(self.config.dump_dir, "feed.warc.gz")
+        if os.path.exists(warc_path):
+            filedict[f"{identifier}-feed.warc.gz"] = warc_path
+            print(f"📼 Including WARC archive: feed.warc.gz")
+
         # Always include feed.json
         feed_path = os.path.join(self.config.dump_dir, "feed.json")
         if os.path.exists(feed_path):
@@ -401,6 +408,56 @@ class IAUploader:
         from urllib.parse import urlparse
         netloc = urlparse(url).netloc.replace(':', '_').replace('.', '_')
         return netloc
+
+    def _upload_warc_separately(self, identifier: str, warc_collection: str) -> None:
+        """Upload WARC file to a separate collection for potential Wayback ingestion."""
+        warc_path = os.path.join(self.config.dump_dir, "feed.warc.gz")
+        if not os.path.exists(warc_path):
+            print("ℹ️  No WARC file found to upload separately")
+            return
+        
+        warc_identifier = f"rss-warc-{identifier}"
+        print(f"\n📼 Uploading WARC to special collection: {warc_collection}")
+        print(f"🆔 WARC Identifier: {warc_identifier}")
+        
+        # Get feed metadata for description
+        feed_meta = self._extract_feed_metadata()
+        
+        warc_metadata = {
+            "mediatype": "web",
+            "collection": warc_collection,
+            "title": f"WARC - RSS Feed - {feed_meta.title}",
+            "description": (
+                f"WARC archive of RSS feed: {feed_meta.title}<br>\n"
+                f"Original URL: {feed_meta.url}<br>\n"
+                f"<br>\n"
+                f"This WARC file contains the complete HTTP transactions for the RSS feed and all downloaded media.<br>\n"
+                f"Format: WARC/1.0<br>\n"
+                f"Created with RSS-Dumper v{UPLOADER_VERSION}<br>\n"
+                f"<br>\n"
+                f"For parsed content, see: https://archive.org/details/rss-{identifier}"
+            ),
+            "subject": "warc; rss; web archiving; feed",
+            "originalurl": feed_meta.url,
+            "scanner": f"RSS-Dumper/{UPLOADER_VERSION}",
+            "format": "WARC"
+        }
+        
+        item = get_item(warc_identifier)
+        
+        # Upload WARC file
+        print(f"📤 Uploading WARC file...")
+        item.upload(
+            files={f"{warc_identifier}.warc.gz": warc_path},
+            metadata=warc_metadata,
+            access_key=self.config.access_key,
+            secret_key=self.config.secret_key,
+            verbose=True,
+            queue_derive=False,
+        )
+        
+        print(f"✅ WARC uploaded to: https://archive.org/details/{warc_identifier}")
+        print(f"📧 You can contact IA about ingesting this WARC into Wayback Machine")
 
     def _upload_to_ia(self, identifier: str, files: Dict[str, str], metadata: Dict[str, str]) -> None:
         """Upload files to Internet Archive."""
@@ -666,7 +723,8 @@ def create_upload_config(args: argparse.Namespace) -> UploadConfig:
         collection=args.collection,
         pack_dumpMeta_dir=args.pack_dumpMeta,
         level0_no_compress=args.level0_no_compress or [],
-        delete_after_upload=args.delete
+        delete_after_upload=args.delete,
+        warc_collection=args.warc_collection
     )
 
 
@@ -725,6 +783,14 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "dump_dir",
         help="Path to the RSS dump directory."
+    )
+
+    parser.add_argument(
+        "--warc-collection",
+        default=None,
+        help="Special collection for WARC files (e.g., 'archiveteam_urls'). "
+             "If set, creates a separate item for the WARC file. "
+             "[default: uploads to same item as other files]"
     )
 
     return parser
