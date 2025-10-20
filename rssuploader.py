@@ -268,6 +268,12 @@ class IAUploader:
         feed_path = os.path.join(self.config.dump_dir, "feed.json")
         if os.path.exists(feed_path):
             filedict[f"{identifier}-feed.json"] = feed_path
+        
+        # Include raw RSS feed backup
+        raw_feed_path = os.path.join(self.config.dump_dir, "feed.rss")
+        if os.path.exists(raw_feed_path):
+            filedict[f"{identifier}-feed.rss"] = raw_feed_path
+            print(f"📄 Including raw RSS feed: feed.rss")
 
         # Compress and add directories
         for dir_name in DIRS_TO_7Z:
