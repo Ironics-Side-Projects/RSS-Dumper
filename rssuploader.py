@@ -539,11 +539,21 @@ class IAUploader:
             print("ℹ️  No channel logo found.")
             return
 
-        # Generate logo filename
-        parsed_url = urlparse(feed_meta.image_url)
-        ext = parsed_url.path.split('.')[-1].lower() if '.' in parsed_url.path else 'jpg'
-        if len(ext) > 5 or not ext.isalnum():
-            ext = 'jpg'
+        # Generate logo filename based on actual local file if available
+        if feed_meta.logo_source_path and os.path.exists(feed_meta.logo_source_path):
+            # Get extension from the actual local file
+            local_ext = os.path.splitext(feed_meta.logo_source_path)[1].lower()
+            if local_ext.startswith('.'):
+                local_ext = local_ext[1:]  # Remove leading dot
+            if len(local_ext) > 5 or not local_ext.isalnum():
+                local_ext = 'png'  # Default to PNG since we convert ICOs
+            ext = local_ext
+        else:
+            # Fallback to parsing from URL if no local file
+            parsed_url = urlparse(feed_meta.image_url)
+            ext = parsed_url.path.split('.')[-1].lower() if '.' in parsed_url.path else 'jpg'
+            if len(ext) > 5 or not ext.isalnum():
+                ext = 'jpg'
         
         logo_name = f"{item.identifier}_logo.{ext}"
         
@@ -562,7 +572,6 @@ class IAUploader:
                 # Read file directly into memory to avoid path issues
                 try:
                     # Use BytesIO like wikiteam3 does
-                    from io import BytesIO
                     with open(feed_meta.logo_source_path, 'rb') as f:
                         logo_content = BytesIO(f.read())
                 except Exception as e:
@@ -572,7 +581,6 @@ class IAUploader:
             # If local read failed or no local file, download from URL
             if logo_content is None:
                 print(f"📥 Downloading logo from: {feed_meta.image_url}")
-                from io import BytesIO
                 response = requests.get(feed_meta.image_url, timeout=30)
                 response.raise_for_status()
                 logo_content = BytesIO(response.content)
