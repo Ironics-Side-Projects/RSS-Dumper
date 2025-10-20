@@ -58,6 +58,74 @@ def download_image(image_url, images_dir, referer=None):
         return None
 
 
+def fetch_favicon(site_url, images_dir, session=None):
+    """Fetch favicon from website homepage."""
+    try:
+        print(f"🔍 Looking for favicon at {site_url}")
+        
+        # Parse the URL to get base domain
+        parsed = urlparse(site_url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+        
+        # Try to fetch the homepage
+        if session:
+            response = session.get(base_url, timeout=10)
+        else:
+            response = requests.get(base_url, timeout=10)
+        response.raise_for_status()
+        
+        html = response.text
+        favicon_url = None
+        
+        # Look for various favicon declarations in order of preference
+        patterns = [
+            r'<link[^>]*rel=["\']apple-touch-icon["\'][^>]*href=["\']([^"\']+)["\']',
+            r'<link[^>]*href=["\']([^"\']+)["\'][^>]*rel=["\']apple-touch-icon["\']',
+            r'<link[^>]*rel=["\']icon["\'][^>]*href=["\']([^"\']+)["\']',
+            r'<link[^>]*href=["\']([^"\']+)["\'][^>]*rel=["\']icon["\']',
+            r'<link[^>]*rel=["\']shortcut icon["\'][^>]*href=["\']([^"\']+)["\']',
+            r'<link[^>]*href=["\']([^"\']+)["\'][^>]*rel=["\']shortcut icon["\']',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, html, re.IGNORECASE)
+            if match:
+                favicon_url = match.group(1)
+                break
+        
+        # If no explicit favicon found, try common locations
+        if not favicon_url:
+            common_paths = ['/favicon.ico', '/favicon.png', '/apple-touch-icon.png']
+            for path in common_paths:
+                test_url = urljoin(base_url, path)
+                try:
+                    if session:
+                        test_response = session.head(test_url, timeout=5)
+                    else:
+                        test_response = requests.head(test_url, timeout=5)
+                    if test_response.status_code == 200:
+                        favicon_url = path
+                        break
+                except:
+                    continue
+        
+        if favicon_url:
+            # Make absolute URL
+            favicon_url = urljoin(base_url, favicon_url)
+            print(f"✅ Found favicon: {favicon_url}")
+            
+            # Download it
+            local_path = download_image(favicon_url, images_dir, referer=base_url)
+            return favicon_url, local_path
+        else:
+            print(f"❌ No favicon found for {base_url}")
+            return None, None
+            
+    except Exception as e:
+        print(f"⚠️ Failed to fetch favicon: {e}")
+        return None, None
+
+
 def extract_media_thumbnails(entry, images_dir, base_url):
     """Extract and download media:thumbnail elements from RSS entry."""
     downloaded = []
@@ -137,8 +205,8 @@ def extract_and_download_images_in_html(html, base_url, images_dir):
     return new_html, downloaded
 
 
-def save_feed_metadata(feed, output_dir, images_dir):
-    """Save channel metadata and download channel image."""
+def save_feed_metadata(feed, output_dir, images_dir, session=None):
+    """Save channel metadata and download channel image or favicon."""
     f = feed.feed
     metadata = {
         'title': getattr(f, 'title', ''),
@@ -154,24 +222,37 @@ def save_feed_metadata(feed, output_dir, images_dir):
         'items_count': len(feed.entries),
     }
 
-    # Download channel image
+    # Try to get channel image from feed
     feed_image = getattr(f, 'image', None)
+    img_url = None
+    local_img = None
+    
     if feed_image:
         img_url = getattr(feed_image, 'href', '') or getattr(feed_image, 'url', '')
         if img_url:
+            print(f"📷 Found feed image: {img_url}")
             # Download image
             local_img = download_image(img_url, images_dir, referer=metadata['link'])
+    
+    # If no feed image, try to get favicon
+    if not local_img and metadata['link']:
+        print("🔎 No feed image found, trying to fetch favicon...")
+        favicon_url, favicon_local = fetch_favicon(metadata['link'], images_dir, session)
+        if favicon_local:
+            img_url = favicon_url
+            local_img = favicon_local
             
-            # Store both original URL and local path - ensure no null chars
-            if local_img:
-                # Clean any potential null characters
-                clean_local_img = ''.join(c for c in local_img if c != '\0')
-                metadata['image'] = {
-                    'url': img_url,
-                    'local_path': clean_local_img,
-                    'title': getattr(feed_image, 'title', ''),
-                    'link': getattr(feed_image, 'link', ''),
-                }
+    # Store image metadata
+    if local_img:
+        # Clean any potential null characters
+        clean_local_img = ''.join(c for c in local_img if c != '\0')
+        metadata['image'] = {
+            'url': img_url,
+            'local_path': clean_local_img,
+            'title': getattr(feed_image, 'title', '') if feed_image else 'Site Favicon',
+            'link': getattr(feed_image, 'link', '') if feed_image else metadata['link'],
+            'is_favicon': not bool(feed_image)  # Track if this was a favicon fallback
+        }
 
     meta_file = output_dir / "feed.json"
     with uopen(meta_file, 'w') as f:
@@ -288,8 +369,8 @@ def download_rss_feed(url: str, output_dir: Path, session: requests.Session, ite
     images_dir = output_dir / "images"
     images_dir.mkdir(exist_ok=True)
 
-    # Save metadata
-    save_feed_metadata(feed, output_dir, images_dir)
+    # Save metadata (now with favicon support)
+    save_feed_metadata(feed, output_dir, images_dir, session)
 
     # Save items with media thumbnail support
     item_count, image_count = save_items_as_files(feed, output_dir, images_dir, format=item_format)

@@ -28,7 +28,7 @@ def create_session(retries=5, user_agent=None) -> requests.Session:
     if user_agent:
         session.headers.update({'User-Agent': user_agent})
     else:
-        session.headers.update({'User-Agent': 'RSSDumper/1.1.0 (+https://github.com/Ironics-Side-Projects/RSS-Dumper)'})
+        session.headers.update({'User-Agent': 'RSSDumper (+https://github.com/Ironics-Side-Projects/RSS-Dumper)'})
 
     print('User-Agent:', session.headers['User-Agent'])
     return session
