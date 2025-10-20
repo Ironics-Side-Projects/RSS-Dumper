@@ -50,7 +50,7 @@ UPLOADED_MARK = 'uploaded_to_IA.mark'
 BUFFER_SIZE = 65536
 
 # Directories to compress
-DIRS_TO_7Z = ["items", "images"]
+DIRS_TO_7Z = ["items", "images", "audio", "video", "documents", "media"]
 MARK_FILES = {
     "items": "items/",      # We don't use mark files — just check dir existence
     "images": "images/",
@@ -275,12 +275,15 @@ class IAUploader:
             filedict[f"{identifier}-feed.rss"] = raw_feed_path
             print(f"📄 Including raw RSS feed: feed.rss")
 
-        # Compress and add directories
+        # Compress and add all media directories
         for dir_name in DIRS_TO_7Z:
             dir_path = os.path.join(self.config.dump_dir, dir_name)
-            if os.path.isdir(dir_path) and os.listdir(dir_path):  # not empty
+            if os.path.isdir(dir_path) and os.listdir(dir_path):  # Check if exists and not empty
                 compressed_file = self._compress_directory(dir_path, dir_name)
                 filedict[f"{identifier}-{dir_name}.7z"] = compressed_file
+                print(f"📦 Added {dir_name} archive")
+            elif os.path.isdir(dir_path):
+                print(f"⏭️  Skipping empty {dir_name} directory")
 
         return filedict
 
@@ -297,14 +300,19 @@ class IAUploader:
         """Compress directory to 7z format."""
         print(f"📦 Compressing {dir_path}...")
 
-        # Determine compression level
+        # Determine compression level based on content type
         if dir_name in self.config.level0_no_compress:
             level = NO_COMPRESSION_LEVEL
             print(f"🗜️  Packing {dir_name} with level 0 compression...")
-        elif dir_name in ["images"]:
+        elif dir_name in ["images", "audio", "video"]:  # Media files are already compressed
             level = MEDIA_COMPRESSION_LEVEL
+            print(f"🗜️  Packing {dir_name} with minimal compression (level {MEDIA_COMPRESSION_LEVEL})...")
+        elif dir_name in ["documents", "media"]:
+            level = 3  # Moderate compression for mixed content
+            print(f"🗜️  Packing {dir_name} with moderate compression (level 3)...")
         else:
             level = DEFAULT_COMPRESSION_LEVEL
+            print(f"🗜️  Packing {dir_name} with default compression (level {DEFAULT_COMPRESSION_LEVEL})...")
 
         return self._compress_with_7z(dir_path, level)
 
@@ -701,7 +709,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         '-n', '--level0-no-compress',
         default=[],
         dest='level0_no_compress',
-        choices=['images'],
+        choices=['images', 'audio', 'video', 'documents', 'media'],
         nargs='?',
         action='append',
         help='Pack specified dir(s) into 7z file(s) without any compression. (level 0, copy mode)'
