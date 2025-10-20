@@ -502,7 +502,7 @@ class IAUploader:
 
     def _create_subject_string(self, feed_meta: FeedMetadata) -> str:
         """Create subject string respecting IA's 255 byte limit."""
-        base_keywords = ["rss", "rssdumper", "feed", "archived", "RSSDumper"]
+        base_keywords = ["rss", "feed", "json", "markdown", "xml", "rss feed", "RSSDumper", "RDF Site Summary", "Really Simple Syndication"]
         all_keywords = base_keywords.copy()
 
         if feed_meta.title and feed_meta.title not in all_keywords:
