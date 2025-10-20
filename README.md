@@ -145,7 +145,7 @@ python3 -m RSS-Dumper.rssuploader ./example.com_20251019_232222 -n images
 python3 -m RSS-Dumper.rssuploader ./example.com_20251019_232222 -d
 
 # Upload WARC to special collection for potential Wayback Machine ingestion
-python3 -m RSS-Dumper.rssuploader ./example.com_20251019_232222 --warc-collection archiveteam_urls
+python3 -m RSS-Dumper.rssuploader ./example.com_20251019_232222 --warc-collection test_collection
 ```
 
 ## Output Structure

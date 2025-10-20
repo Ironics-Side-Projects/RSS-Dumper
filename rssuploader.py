@@ -266,10 +266,14 @@ class IAUploader:
             # Upload individual files in dumpMeta
             self._add_dumpmeta_files(identifier, filedict)
 
+        # Only include WARC in main collection if NOT using separate WARC collection
         warc_path = os.path.join(self.config.dump_dir, "feed.warc.gz")
         if os.path.exists(warc_path):
-            filedict[f"{identifier}-feed.warc.gz"] = warc_path
-            print(f"📼 Including WARC archive: feed.warc.gz")
+            if not self.config.warc_collection:
+                filedict[f"{identifier}-feed.warc.gz"] = warc_path
+                print(f"📼 Including WARC archive in main collection: feed.warc.gz")
+            else:
+                print(f"📼 WARC will be uploaded separately to collection: {self.config.warc_collection}")
 
         # Always include feed.json
         feed_path = os.path.join(self.config.dump_dir, "feed.json")
@@ -417,7 +421,7 @@ class IAUploader:
             return
         
         warc_identifier = f"rss-warc-{identifier}"
-        print(f"\n📼 Uploading WARC to special collection: {warc_collection}")
+        print(f"\n📼 Uploading WARC to separate collection: {warc_collection}")
         print(f"🆔 WARC Identifier: {warc_identifier}")
         
         # Get feed metadata for description
@@ -437,27 +441,57 @@ class IAUploader:
                 f"<br>\n"
                 f"For parsed content, see: https://archive.org/details/rss-{identifier}"
             ),
-            "subject": "warc; rss; web archiving; feed",
+            "subject": "warc; rss; web archiving; feed; RSSDumper",
             "originalurl": feed_meta.url,
             "scanner": f"RSS-Dumper/{UPLOADER_VERSION}",
-            "format": "WARC"
+            "format": "WARC",
+            "last-updated-date": time.strftime("%Y-%m-%d", time.gmtime()),
         }
+        
+        if feed_meta.language:
+            warc_metadata["language"] = feed_meta.language
         
         item = get_item(warc_identifier)
         
-        # Upload WARC file
-        print(f"📤 Uploading WARC file...")
-        item.upload(
-            files={f"{warc_identifier}.warc.gz": warc_path},
-            metadata=warc_metadata,
-            access_key=self.config.access_key,
-            secret_key=self.config.secret_key,
-            verbose=True,
-            queue_derive=False,
-        )
+        # Check if WARC already exists
+        warc_filename = f"{warc_identifier}.warc.gz"
+        if item.exists:
+            for file_info in item.files:
+                if file_info["name"] == warc_filename:
+                    print(f"⏭️  WARC file {warc_filename} already exists in item.")
+                    print(f"✅ WARC available at: https://archive.org/details/{warc_identifier}")
+                    return
         
-        print(f"✅ WARC uploaded to: https://archive.org/details/{warc_identifier}")
-        print(f"📧 You can contact IA about ingesting this WARC into Wayback Machine")
+        # Upload WARC file
+        print(f"📤 Uploading WARC file to {warc_collection}...")
+        try:
+            response = item.upload(
+                files={warc_filename: warc_path},
+                metadata=warc_metadata,
+                access_key=self.config.access_key,
+                secret_key=self.config.secret_key,
+                verbose=True,
+                queue_derive=False,
+            )
+            
+            # Check response
+            for r in response:
+                if isinstance(r, requests.Response):
+                    r.raise_for_status()
+            
+            print(f"✅ WARC file uploaded successfully")
+            
+            # Wait for item to be created
+            print(f"⏳ Waiting for WARC item to be available...")
+            self._wait_for_item_creation(warc_identifier)
+            
+            print(f"✅ WARC uploaded to: https://archive.org/details/{warc_identifier}")
+            print(f"📧 You can contact IA staff about ingesting this WARC into Wayback Machine")
+            
+        except Exception as e:
+            print(f"❌ Failed to upload WARC separately: {e}")
+            print(f"⚠️  The WARC file can still be found in the main collection if needed")
+            raise
 
     def _upload_to_ia(self, identifier: str, files: Dict[str, str], metadata: Dict[str, str]) -> None:
         """Upload files to Internet Archive."""
