@@ -84,7 +84,7 @@ def search_ia(ori_url: str, addeddate_intervals: Optional[List[str]] = None):
         else:
             logger.warning(f'No match: stored={normalized_stored}, searching={normalized_ori}, identifier={result.get("identifier")}')
 
-def search_ia_recent(ori_url: str, days: int = 365):
+def search_ia_recent(ori_url: str, days: int = 60):
     now_utc = datetime.datetime.utcnow()
     now_utc_iso = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
     one_year_ago = now_utc - datetime.timedelta(days=days)
@@ -93,7 +93,7 @@ def search_ia_recent(ori_url: str, days: int = 365):
     yield from search_ia(ori_url, [one_year_ago_iso, now_utc_iso])
 
 
-def any_recent_ia_item_exists(ori_url: str, days: int = 365) -> bool:
+def any_recent_ia_item_exists(ori_url: str, days: int = 60) -> bool:
     for item in search_ia_recent(ori_url, days):
         print('✅ Found existing dump at Internet Archive:')
         print(item)
