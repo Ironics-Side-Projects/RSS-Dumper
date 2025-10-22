@@ -1,4 +1,4 @@
-DUMPER_VERSION = '1.6.2'
+DUMPER_VERSION = '1.6.3'
 
 try:
     from utils.exceptions import VersionOutdatedError
