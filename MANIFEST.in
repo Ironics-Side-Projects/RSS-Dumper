@@ -1,0 +1,7 @@
+include README.md
+include LICENSE
+recursive-include utils *
+include __version__.py
+include rssdumper.py
+include rssuploader.py
+include rssarchiver_core.py

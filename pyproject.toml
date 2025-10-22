@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rss-dumper"
+version = "1.6.2"
+description = "Full archival tool for RSS feeds with image downloading and Internet Archive support."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "requests",
+    "feedparser",
+    "warcio",
+    "Pillow",
+    "internetarchive",
+    "rich",
+]
+
+[tool.setuptools]
+packages = { find = {} }

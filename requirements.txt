@@ -1,0 +1,6 @@
+requests
+feedparser
+warcio
+Pillow
+internetarchive
+rich
