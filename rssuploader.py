@@ -24,23 +24,22 @@ from internetarchive import get_item, Item
 import requests
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-if script_dir not in sys.path:
-    sys.path.insert(0, script_dir)
-
+# Prefer package-relative imports for module execution; fallback to
+# script-style imports for running from repo root.
 try:
-    from __version__ import DUMPER_VERSION as UPLOADER_VERSION
-except ImportError:
     from .__version__ import DUMPER_VERSION as UPLOADER_VERSION
+except Exception:
+    from __version__ import DUMPER_VERSION as UPLOADER_VERSION
 
 try:
-    from utils.config import get_config
-except ImportError:
     from .utils.config import get_config
+except Exception:
+    from utils.config import get_config
 
 try:
-    from utils.util import smkdirs
-except ImportError:
     from .utils.util import smkdirs
+except Exception:
+    from utils.util import smkdirs
 
 
 # Constants

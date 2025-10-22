@@ -15,9 +15,17 @@ import uuid
 from warcio.warcwriter import WARCWriter
 from warcio.statusandheaders import StatusAndHeaders
 
-from .utils.util import uopen, smkdirs
-from .utils.patch import SessionMonkeyPatch
-from .__version__ import DUMPER_VERSION
+# Make imports work both when this file is executed as part of package
+# (relative imports) and when running scripts directly from the repo
+# (absolute imports). Try relative imports first, then fall back.
+try:
+    from .utils.util import uopen, smkdirs
+    from .utils.patch import SessionMonkeyPatch
+    from .__version__ import DUMPER_VERSION
+except Exception:
+    from utils.util import uopen, smkdirs
+    from utils.patch import SessionMonkeyPatch
+    from __version__ import DUMPER_VERSION
 
 # Try to import PIL for image conversion
 try:

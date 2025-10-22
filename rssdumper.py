@@ -15,50 +15,49 @@ from pathlib import Path
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-if script_dir not in sys.path:
-    sys.path.insert(0, script_dir)
-
-# Hybrid imports — work in both script and module mode
+# Prefer package-relative imports so this file works when run with
+# `python -m RSS-Dumper.rssdumper` (module mode). Fall back to
+# top-level imports to support running as a script inside the
+# repository directory.
 try:
-    from __version__ import DUMPER_VERSION as UPLOADER_VERSION, rss_dumper_outdated_check
-except ImportError:
     from .__version__ import DUMPER_VERSION as UPLOADER_VERSION, rss_dumper_outdated_check
+except Exception:
+    from __version__ import DUMPER_VERSION as UPLOADER_VERSION, rss_dumper_outdated_check
 
 try:
-    from utils.exceptions import HTTPStatusError, show_edge_case_warning
-except ImportError:
     from .utils.exceptions import HTTPStatusError, show_edge_case_warning
+except Exception:
+    from utils.exceptions import HTTPStatusError, show_edge_case_warning
 
 try:
-    from utils.config import get_config, update_config
-except ImportError:
     from .utils.config import get_config, update_config
+except Exception:
+    from utils.config import get_config, update_config
 
 try:
-    from utils.dump_lock import DumpLock
-except ImportError:
     from .utils.dump_lock import DumpLock
+except Exception:
+    from utils.dump_lock import DumpLock
 
 try:
-    from utils.ia_checker import any_recent_ia_item_exists
-except ImportError:
     from .utils.ia_checker import any_recent_ia_item_exists
+except Exception:
+    from utils.ia_checker import any_recent_ia_item_exists
 
 try:
-    from utils.session import create_session
-except ImportError:
     from .utils.session import create_session
+except Exception:
+    from utils.session import create_session
 
 try:
-    from utils.util import smkdirs, standardize_url, print_with_lock as print
-except ImportError:
     from .utils.util import smkdirs, standardize_url, print_with_lock as print
+except Exception:
+    from utils.util import smkdirs, standardize_url, print_with_lock as print
 
 try:
-    from rssarchiver_core import download_rss_feed
-except ImportError:
     from .rssarchiver_core import download_rss_feed
+except Exception:
+    from rssarchiver_core import download_rss_feed
 
 
 def signal_handler(sig, frame):
